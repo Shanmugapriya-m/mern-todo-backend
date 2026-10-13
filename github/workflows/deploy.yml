@@ -1,0 +1,82 @@
+name: Deploy
+
+on:
+  push:
+    branches: [dev]          # auto-deploy dev on every push
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deploy environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-dev:
+    name: Deploy to Dev
+    if: ${{ github.event_name == 'push' || inputs.environment == 'dev' }}
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Deploy to Dev EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEV_EC2_HOST }}
+          username: ${{ secrets.DEV_EC2_USERNAME }}
+          key: ${{ secrets.DEV_EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ vars.DEV_PROJECT_PATH }}"
+            git fetch --all
+            git checkout ${{ github.ref_name }}
+            git pull --ff-only origin ${{ github.ref_name }}
+            npm ci --legacy-peer-deps
+            npm run build
+            npm prune --omit=dev --legacy-peer-deps
+            pm2 restart todo-api
+            pm2 save
+            sleep 5
+            curl -fsS localhost:5000/api/todos > /dev/null && echo "Health check OK"
+
+  deploy-prod:
+    name: Deploy to Prod
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'prod' }}
+    runs-on: ubuntu-latest
+    environment: prod
+
+    steps:
+      - name: Validate branch is main
+        if: ${{ github.ref_name != 'main' }}
+        run: |
+          echo "Prod deployment only allowed from main branch. Selected branch: ${{ github.ref_name }}"
+          exit 1
+
+      - name: Deploy to Prod EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_EC2_HOST }}
+          username: ${{ secrets.PROD_EC2_USERNAME }}
+          key: ${{ secrets.PROD_EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd "${{ vars.PROD_PROJECT_PATH }}"
+            git fetch --all
+            git checkout main
+            git pull --ff-only origin main
+            npm ci --legacy-peer-deps
+            npm run build
+            npm prune --omit=dev --legacy-peer-deps
+            pm2 restart todo-api
+            pm2 save
+            sleep 5
+            curl -fsS localhost:5000/api/todos > /dev/null && echo "Health check OK"
