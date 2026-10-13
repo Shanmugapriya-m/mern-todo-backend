@@ -10,9 +10,9 @@ on:
         required: true
         default: 'dev'
         type: choice
-        # options:
-        #   - dev
-        #   - prod
+        options:
+          - dev
+          - prod
 
 # concurrency:
 #   group: deploy-${{ inputs.environment || 'dev' }}
