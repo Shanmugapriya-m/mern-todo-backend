@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [dev]          # auto-deploy dev on every push
+    branches: [dev]         
   workflow_dispatch:
     inputs:
       environment:
@@ -10,13 +10,13 @@ on:
         required: true
         default: 'dev'
         type: choice
-        options:
-          - dev
-          - prod
+        # options:
+        #   - dev
+        #   - prod
 
-concurrency:
-  group: deploy-${{ inputs.environment || 'dev' }}
-  cancel-in-progress: false
+# concurrency:
+#   group: deploy-${{ inputs.environment || 'dev' }}
+#   cancel-in-progress: false
 
 jobs:
   deploy-dev:
